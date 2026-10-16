@@ -1,0 +1,143 @@
+PROJECT HANDOVER
+Model Predictive Control for an Artificial PancreasGlucose–Insulin Regulation using MATLAB/Simulink
+Technical status, reproducibility notes, results, and next steps
+1. Why this handover exists
+This document is for a person who has not participated in the project. It explains the project goal, the controller comparison already carried out, the numerical results that are currently confirmed, how to interpret those results, and the steps needed to continue the work—especially the move toward a more physiologically detailed Hovorka glucose–insulin model.
+Important status rule: this handover separates confirmed evidence from proposed future work. The available project notes contain the latest numerical comparison and MATLAB variable names, but do not record the exact Windows folder path, all model/script filenames, the full Simulink block diagram, or the full parameter set. Those details must be checked on the actual computer before anyone claims the project is fully reproducible.
+2. Project in plain language
+The project investigates whether Model Predictive Control (MPC) can regulate blood glucose more effectively than a fixed/open-loop insulin strategy when a meal causes glucose to rise. The long-term application is an artificial pancreas: a closed-loop system that uses glucose measurements to decide how much insulin to deliver.
+The present simulation compares three cases: (1) open-loop insulin control, (2) MPC without advance knowledge of a meal, and (3) MPC with meal preview. Meal preview means the controller is given information about an upcoming meal disturbance early enough to account for it in its prediction and insulin decision. The central research question is whether that extra information helps the controller respond earlier and reduce the post-meal glucose peak.
+3. Essential concepts for the incoming teammate
+Glucose (G) — The regulated variable. In the current results it is reported in mg/dL. The controller aims to keep it near a target/reference.
+Insulin input (I or insulin command) — The manipulated input produced by the controller or fixed strategy. The logged maximum is a numerical command/output; its physical units and whether it represents rate, normalized units, or another quantity must be confirmed from the model.
+Meal disturbance — A meal introduces glucose into the system and tends to raise blood glucose. In a simulation this is represented by a disturbance signal or meal-appearance model.
+Open-loop control — The insulin input is prescribed rather than continually recalculated from measured glucose error.
+MPC without meal preview — At each control update, MPC predicts future glucose using its model and chooses an input sequence, but does not receive advance knowledge of the future meal event.
+MPC with meal preview — MPC receives advance meal information and can account for the expected disturbance in its prediction. This is intended to improve the timing of insulin delivery.
+Prediction horizon — How far into the future the MPC predicts system behavior.
+Control horizon — How many future control moves are optimized before the remaining moves are constrained/held according to the implementation.
+Constraints and tuning — MPC typically balances tracking error against control effort while respecting input and possibly rate limits. Results depend on objective weights, horizons, sampling time, constraints, model accuracy, and disturbance timing.
+4. What has been done so far (confirmed)
+The project has progressed beyond just a topic proposal: a MATLAB/Simulink simulation has been run for three control cases, signals have been retrieved from the simulation output, and peak glucose and maximum insulin have been calculated. The currently documented signal names include G_ol, G_np, G_mp and their corresponding insulin signals, as well as G_mp and I_mp obtained through the simulation output logs.
+The three cases are:
+Open-loop baseline (suffix _ol in the logged MATLAB variable names).
+MPC with no meal preview (suffix _np).
+MPC with meal preview (suffix _mp).
+The available notes do not fully document the controller equations, exact meal profile, simulation duration, sampling interval, MPC horizon values, objective weights, actuator constraints, or exact Simulink filenames. Record those from the actual model and scripts as part of the next reproducibility pass.
+5. Confirmed numerical results
+Case
+Peak glucose (mg/dL)
+Excursion above 90 (mg/dL)
+Maximum insulin command
+Open-loop
+104.597
+14.597
+7.000
+MPC — no preview
+104.051
+14.051
+7.754
+MPC — meal preview
+103.664
+13.664
+7.884
+The excursion values are calculated relative to 90 mg/dL, which is the reference/baseline used in the saved comparison. They are peak minus 90; they are not the maximum deviation from an arbitrary target unless 90 mg/dL is indeed the target/reference in the model.
+6. What the numbers mean
+Compared with open loop, the no-preview MPC peak is lower by 104.597 − 104.051 = 0.546 mg/dL. The meal-preview MPC peak is lower by 104.597 − 103.664 = 0.933 mg/dL. The preview case is also lower than the no-preview MPC case by 104.051 − 103.664 = 0.387 mg/dL.
+The maximum insulin command rises from 7.000 in open loop to 7.754 with no-preview MPC and 7.884 with meal-preview MPC. In this particular simulation, the preview controller produces the lowest peak glucose, while also producing the largest logged insulin command. This is consistent with the idea that preview information can let the controller respond to an upcoming meal, but the differences in peak glucose are small.
+Do not overstate this result. It does not prove that MPC is universally better, that the controller is clinically safe, or that meal preview will always help. It is evidence for these particular model settings, disturbance, and controller tuning. Before making strong claims, confirm that all three cases use comparable initial conditions, the same meal disturbance, the same simulation duration, and consistent output definitions.
+7. How to describe the graphs verbally
+The glucose comparison plot should show three glucose-versus-time curves. All cases are exposed to the meal-related disturbance. The open-loop curve reaches the highest documented peak, about 104.597 mg/dL. The no-preview MPC curve has a slightly lower peak of about 104.051 mg/dL. The meal-preview MPC curve has the lowest peak of the three, about 103.664 mg/dL. The curves' exact shapes, time of peak, time to return toward baseline, and any oscillations cannot be described reliably from the peak values alone; inspect the actual plotted traces before describing those features.
+The insulin comparison plot should show the insulin command over time for the three cases. The recorded maxima are 7.000, 7.754, and 7.884 for open loop, no-preview MPC, and meal-preview MPC respectively. Do not infer the total insulin delivered or the area under the insulin curve from the maximum alone. If insulin usage is an important claim, calculate an appropriate integral or total-delivery metric using the correct signal units and time base.
+8. MATLAB variables and commands already present in the notes
+A saved snippet shows this pattern for the meal-preview case:
+G_mp = out.logsout{1}.Values;I_mp = out.logsout{2}.Values;G_peak_mp = max(G_mp.Data);I_max_mp = max(I_mp.Data);fprintf('Meal-preview MPC peak glucose = %.3f mg/dL\\n', G_peak_mp);fprintf('Meal-preview MPC maximum insulin = %.3f\\n', I_max_mp);
+Another saved comparison uses G_ol, G_np, and G_mp for the glucose traces. The insulin signals are likely named in parallel, but verify their actual names in the workspace before running code. In Simulink, out.logsout{1} and out.logsout{2} depend on logging order. A safer long-term practice is to inspect the logged signal names or retrieve signals by name rather than assuming an index always points to glucose or insulin.
+9. Next immediate task: calculate peak times
+The previous working session identified peak timing as the next missing result. Run the following after confirming that G_ol, G_np, and G_mp are available in the MATLAB workspace and are timeseries-like objects with Time and Data:
+[~,idx_ol] = max(G_ol.Data);[~,idx_np] = max(G_np.Data);[~,idx_mp] = max(G_mp.Data);t_peak_ol = G_ol.Time(idx_ol);t_peak_np = G_np.Time(idx_np);t_peak_mp = G_mp.Time(idx_mp);fprintf('Open-loop peak time = %.1f min\\n', t_peak_ol/60);fprintf('No-preview MPC peak time = %.1f min\\n', t_peak_np/60);fprintf('Meal-preview MPC peak time = %.1f min\\n', t_peak_mp/60);
+The division by 60 assumes Time is recorded in seconds. Check the model's time units first. If Time is already in minutes, do not divide by 60. After obtaining these values, record peak time alongside peak glucose.
+10. How to make the results reproducible
+Open the actual project directory and identify the main Simulink model (.slx), initialization script, controller scripts/functions, and any saved results (.mat). Do not guess filenames.
+Create a small README or project index listing each real filename, its purpose, and how to run it.
+Open the model and confirm solver settings, stop time, fixed/variable-step choice, and relevant sample times.
+Confirm initial glucose/insulin states and the meal disturbance profile for all three cases.
+Run each case from a clean, consistent initialization so one simulation does not accidentally inherit workspace state from another.
+Verify the signal names and units in logsout. Prefer named signal access where supported.
+Save the simulation outputs and the script that calculates all metrics, so the table can be regenerated from data rather than manually typed.
+Plot glucose versus time with labeled axes (Time in min, Glucose in mg/dL), a legend, and a clearly marked reference line at 90 mg/dL if 90 is the intended reference.
+Plot insulin command versus time separately, with units stated only after confirming what the signal represents.
+Add metrics beyond peak: time-to-peak, final glucose, time in a defined target band, integrated absolute error, and insulin total/area under curve where meaningful and physically interpretable.
+11. Hovorka model: what it is and why it matters
+The Hovorka model is a more detailed physiological model commonly used in artificial-pancreas research. Rather than representing glucose response as a very simple input/output relationship, it represents important processes such as subcutaneous insulin absorption, insulin action in the body, glucose distribution/transport, endogenous glucose production and utilization, and meal glucose appearance. Exact state definitions and equations depend on the specific published formulation and implementation chosen.
+The Hovorka model should be introduced as a separate, carefully verified plant model—not by simply renaming the current simulation. The existing MPC comparison can remain a useful baseline. A new Hovorka implementation should first be validated without MPC, then connected to the controller after the plant behaves plausibly.
+12. Suggested Hovorka implementation roadmap
+Choose and document one reference formulation: Obtain the original paper or a reliable published implementation. Record the exact equations, state meanings, units, parameter values, and any patient-specific parameters. Do not mix equations or parameters from different implementations without documenting the changes.
+Create a parameter/units sheet: For every parameter, record symbol, meaning, value, units, source, and whether it is fixed or individualized. Verify unit conversions explicitly.
+Implement the plant first: Build the differential equations in MATLAB Function blocks, Simulink integrators, or a MATLAB ODE function. Keep meal input and insulin input separate. Use clear names for states and outputs.
+Check initial conditions and basal steady state: With no meal and basal insulin, verify that the model remains near its expected basal operating point. If it drifts unexpectedly, check equations, units, parameter values, initial conditions, and solver settings.
+Test meal response open loop: Apply a documented meal profile with a known time and magnitude. Confirm that glucose responds in the expected direction and with plausible timing. Compare against the reference formulation or published benchmark where possible.
+Test insulin response separately: Apply a small, controlled insulin change and inspect whether glucose responds in the expected direction and on a plausible timescale. Check for numerical instability or unrealistic negative states.
+Add logging and unit tests: Log glucose, insulin, meal appearance, and relevant model states. Add checks for NaN/Inf values, negative states where physiologically impossible, and expected basal behavior.
+Connect MPC only after plant validation: Define the controller's prediction model, sampling time, input constraints, target, horizons, and objective. Confirm that the model used for prediction is compatible with the Hovorka plant and the controller's update rate.
+Repeat all three scenarios: Run open loop, MPC without meal preview, and MPC with meal preview using identical initial conditions and meal disturbance. Compare the same metrics as the current model.
+Assess robustness: Test different meal sizes/timings, parameter variation, sensor noise or delay, and actuator constraints as appropriate to the project scope. Report limitations honestly.
+13. Important caution about the artificial-pancreas framing
+This is a simulation and control-engineering project, not a medical device. A lower simulated peak does not establish clinical safety. A serious evaluation should consider hypoglycemia risk, time in range, insulin constraints, sensor and actuator delays, parameter uncertainty, and failure cases. Do not use this model or its controller to make real insulin dosing decisions.
+14. File names and computer location: current knowledge
+The project title recorded in the conversation is “Model Predictive Control for Artificial Pancreas (Glucose-Insulin Regulation) using MATLAB Simulink.” The available notes do not confirm the actual computer directory or the exact names of the .slx, .m, or .mat files. The only confirmed MATLAB variable names in the saved notes are G_ol, G_np, G_mp, G_mp.Data, I_mp, and the derived peak/maximum variables shown above. These are workspace variable names, not proof of saved file names.
+Before handing the computer to someone else, fill in this inventory from File Explorer and MATLAB:
+Item
+Actual path / filename
+Purpose / how to run
+Project root folder
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Main Simulink model (.slx)
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Initialization / parameter script (.m)
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Open-loop setup or script
+[Fill in from actual computer]
+[Describe actual role and run steps]
+No-preview MPC setup or script
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Meal-preview MPC setup or script
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Hovorka model file (planned / in progress)
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Saved simulation results (.mat)
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Figures / exported plots
+[Fill in from actual computer]
+[Describe actual role and run steps]
+Report / presentation / literature PDFs
+[Fill in from actual computer]
+[Describe actual role and run steps]
+15. Recommended folder organization going forward
+This is a recommendation for organizing future work, not a claim about the folders that already exist. Keep the current files where they are until their dependencies are understood; then organize or copy them carefully.
+ArtificialPancreas_MPC/  README_Handover.docx  models/    current_baseline/    hovorka/  scripts/    initialize_parameters.m    run_open_loop.m    run_mpc_no_preview.m    run_mpc_meal_preview.m    calculate_metrics.m    plot_comparison.m  results/    data/    figures/  literature/  reports/
+16. Suggested next-work priority list
+Find and document the real project folder and filenames; make a backup before modifying anything.
+Calculate and record the peak times for all three existing cases.
+Create reproducible comparison plots from the logged data and export them with meaningful filenames.
+Confirm simulation time units, glucose units, insulin-command units, meal profile, target/reference, and controller settings.
+Create one metrics script that regenerates the results table automatically.
+Select the exact Hovorka reference formulation and implement/validate the plant before integrating MPC.
+Repeat the three-way comparison on the validated Hovorka plant, then discuss performance and limitations.
+17. Short briefing the next person can use
+“My project is Model Predictive Control for an Artificial Pancreas using MATLAB/Simulink. The current simulation compares open-loop insulin control, MPC without meal preview, and MPC with meal preview during a meal-related glucose disturbance. The confirmed peak glucose values are 104.597, 104.051, and 103.664 mg/dL respectively. Their maximum logged insulin commands are 7.000, 7.754, and 7.884. In this setup, meal-preview MPC gives the lowest peak glucose, but the improvement over open loop is modest and comes with a slightly larger maximum insulin command. We still need to record the exact peak times, verify units and simulation settings, document the actual file locations, and produce reproducible plots. The major next technical task is to build and validate a Hovorka physiological model, then run the same three controller cases on it. The Hovorka model should be validated open loop before it is used as the MPC plant.”
+18. Final checklist before declaring the handover complete
+The recipient can locate the project root folder without help.
+The main model opens and runs from a clean MATLAB session.
+All scripts and dependencies are listed in the README.
+The three cases can be rerun and reproduce the reported peak values within expected numerical tolerance.
+Peak times, units, meal timing, controller settings, and graph filenames are recorded.
+The distinction between confirmed current-model results and planned Hovorka work is understood.
+A backup copy exists before major model changes.
